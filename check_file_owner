@@ -1,0 +1,114 @@
+#! /usr/bin/perl -w
+
+# check_file_owner IS4U, s.r.o. <tech@is4u.cz>
+#
+# Checks a file's uid and gid settings.
+# Based on check_file_age by Steven Grimm <koreth-nagios@midwinter.com>
+#
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty
+# of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# you should have received a copy of the GNU General Public License
+# along with this program (or with Nagios);  if not, write to the
+# Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+# Boston, MA 02111-1307, USA
+
+use strict;
+use English;
+use Getopt::Long;
+use File::stat;
+use vars qw($PROGNAME $PROGVERSION);
+use lib "/usr/lib64/nagios/plugins";
+use utils qw (%ERRORS &print_revision &support);
+
+sub print_help ();
+sub print_usage ();
+
+my ($opt_V, $opt_h, $opt_f, $opt_u, $opt_g);
+my ($result, $message, $age, $size, $st);
+
+$PROGNAME="check_file_perms";
+$PROGVERSION="0.1";
+
+$opt_f = undef;
+$opt_u = undef;
+$opt_g = undef;
+
+Getopt::Long::Configure('bundling');
+GetOptions(
+	"V"   => \$opt_V, "version"	=> \$opt_V,
+	"h"   => \$opt_h, "help"	=> \$opt_h,
+	"f=s" => \$opt_f, "file"	=> \$opt_f,
+	"u=f" => \$opt_u, "uid"		=> \$opt_u,
+	"g=f" => \$opt_g, "gid"		=> \$opt_g);
+
+if ($opt_V) {
+	print_revision($PROGNAME, $PROGVERSION);
+	exit $ERRORS{'OK'};
+}
+
+if ($opt_h) {
+	print_help();
+	exit $ERRORS{'OK'};
+}
+
+$opt_f = shift unless ($opt_f);
+
+if (! $opt_f) {
+	print "FILE_OWNER UNKNOWN: No file specified\n";
+	exit $ERRORS{'UNKNOWN'};
+}
+
+# Check that file exists (can be directory or link)
+unless (-e $opt_f) {
+	print "FILE_OWNER CRITICAL: File not found - $opt_f\n";
+	exit $ERRORS{'CRITICAL'};
+}
+
+# Must be defined here, uid or gid can be 0
+unless (defined $opt_u or defined $opt_g) {
+	print "FILE_OWNER UNKNOWN: At least one of uid or gid has to be specified\n";
+	exit $ERRORS{'UNKNOWN'};
+}
+
+$st = File::stat::stat($opt_f);
+
+$result = 'OK';
+
+if (defined $opt_u and $st->uid != $opt_u) {
+	$result = 'CRITICAL';
+}
+if (defined $opt_g and $st->gid != $opt_g) {
+	$result = 'CRITICAL';
+}
+
+my $output = "FILE_PERMS $result: $opt_f has uid ".$st->uid;
+$output .= " (wanted $opt_u)" if defined $opt_u;
+$output .= " and gid ".$st->gid;
+$output .= " (wanted $opt_g)" if defined $opt_g;
+print "$output\n";
+#print "FILE_PERMS $result: $opt_f has owner ".$st->uid." (wanted $opt_u) and group ".$st->gid." (wanted $opt_g)\n";
+exit $ERRORS{$result};
+
+sub print_usage () {
+	print "Usage:\n";
+	print "  $PROGNAME -f <file> [-u <uid>|-g <gid>]\n";
+	print "  $PROGNAME [-h | --help]\n";
+	print "  $PROGNAME [-V | --version]\n";
+}
+
+sub print_help () {
+	print_revision($PROGNAME, $PROGVERSION);
+	print "<tech\@is4u.cz>\n\n";
+	print_usage();
+	print "\n";
+	support();
+}
